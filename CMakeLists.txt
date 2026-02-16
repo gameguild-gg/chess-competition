@@ -180,6 +180,7 @@ if(EMSCRIPTEN)
         -sALLOW_MEMORY_GROWTH=1
         -sEXIT_RUNTIME=1
         -sINVOKE_RUN=0
+        "-sEXPORTED_RUNTIME_METHODS=['callMain']"
         --shell-file ${CMAKE_SOURCE_DIR}/chess-cli/shell.html
     )
 
