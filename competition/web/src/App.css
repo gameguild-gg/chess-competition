@@ -408,11 +408,49 @@ body {
   margin-bottom: 12px;
 }
 
+.tournament-controls {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem;
+  background-color: rgba(0, 0, 0, 0.3);
+  border-radius: 8px;
+  flex-wrap: wrap;
+}
+
+.tournament-controls label {
+  font-weight: 500;
+  min-width: 120px;
+  color: var(--text-primary);
+}
+
+.tournament-controls input[type="range"] {
+  flex: 1;
+  min-width: 150px;
+  cursor: pointer;
+}
+
+.tournament-controls input[type="range"]:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.tournament-controls .delay-value {
+  font-family: monospace;
+  min-width: 60px;
+  text-align: right;
+  padding: 0.25rem 0.5rem;
+  background-color: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  color: var(--accent);
+}
+
 .tournament-actions {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
   margin-bottom: 12px;
+  flex-direction: column;
 }
 
 .btn-secondary {

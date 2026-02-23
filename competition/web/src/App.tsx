@@ -89,12 +89,38 @@ function App() {
       throw new Error('Game engine not ready');
     }
 
-    while (true) {
-      setWhitePlayer({ type: 'bot', bot: whiteBot });
-      setBlackPlayer({ type: 'bot', bot: blackBot });
+    let whiteBotWins = 0;
+    let blackBotWins = 0;
+    let gameNumber = 1;
+    let game2Winner: BotInfo | null = null;
+    let game2Loser: BotInfo | null = null;
+
+    // Play up to 3 games
+    while (gameNumber <= 3) {
+      // Determine colors for this game
+      let currentWhiteBot: BotInfo;
+      let currentBlackBot: BotInfo;
+
+      if (gameNumber <= 2) {
+        // Games 1-2: keep same colors (white stays white, black stays black)
+        currentWhiteBot = whiteBot;
+        currentBlackBot = blackBot;
+      } else {
+        // Game 3: loser of game 2 plays as white
+        if (game2Winner === whiteBot) {
+          currentWhiteBot = blackBot;
+          currentBlackBot = whiteBot;
+        } else {
+          currentWhiteBot = whiteBot;
+          currentBlackBot = blackBot;
+        }
+      }
+
+      setWhitePlayer({ type: 'bot', bot: currentWhiteBot });
+      setBlackPlayer({ type: 'bot', bot: currentBlackBot });
       await engineRef.current.loadPlayers(
-        { type: 'bot', bot: whiteBot },
-        { type: 'bot', bot: blackBot },
+        { type: 'bot', bot: currentWhiteBot },
+        { type: 'bot', bot: currentBlackBot },
       );
       await engineRef.current.play();
 
@@ -104,15 +130,56 @@ function App() {
       }
 
       const winnerColor = getWinnerColor(state.result);
-      if (!winnerColor) {
-        // Draw: rematch with same colors
-        continue;
+
+      if (gameNumber === 1) {
+        if (winnerColor === 'w') {
+          whiteBotWins++;
+          if (whiteBotWins === 2) {
+            return { winner: whiteBot, loser: blackBot, result: state.result };
+          }
+        } else if (winnerColor === 'b') {
+          blackBotWins++;
+          if (blackBotWins === 2) {
+            return { winner: blackBot, loser: whiteBot, result: state.result };
+          }
+        }
+      } else if (gameNumber === 2) {
+        if (winnerColor === 'w') {
+          whiteBotWins++;
+          game2Winner = whiteBot;
+          game2Loser = blackBot;
+          if (whiteBotWins === 2) {
+            return { winner: whiteBot, loser: blackBot, result: state.result };
+          }
+        } else if (winnerColor === 'b') {
+          blackBotWins++;
+          game2Winner = blackBot;
+          game2Loser = whiteBot;
+          if (blackBotWins === 2) {
+            return { winner: blackBot, loser: whiteBot, result: state.result };
+          }
+        }
+      } else if (gameNumber === 3) {
+        // Game 3 determines the final winner
+        if (winnerColor === 'w') {
+          return { winner: currentWhiteBot, loser: currentBlackBot, result: state.result };
+        } else if (winnerColor === 'b') {
+          return { winner: currentBlackBot, loser: currentWhiteBot, result: state.result };
+        } else {
+          // Draw in game 3 - the winner from game 2 advances
+          if (game2Winner === whiteBot) {
+            return { winner: whiteBot, loser: blackBot, result: state.result };
+          } else {
+            return { winner: blackBot, loser: whiteBot, result: state.result };
+          }
+        }
       }
 
-      const winner = winnerColor === 'w' ? whiteBot : blackBot;
-      const loser = winnerColor === 'w' ? blackBot : whiteBot;
-      return { winner, loser, result: state.result };
+      gameNumber++;
     }
+
+    // Fallback (should not reach here)
+    throw new Error('Best-of-3 match completed without winner');
   };
 
   const handleStartTournament = async () => {
@@ -361,10 +428,25 @@ function App() {
       <div className="tournament-panel">
         <h2>Bot Tournament</h2>
         <p className="tournament-subtitle">
-          Single-elimination, randomized bracket. Draws rematch until decisive.
+          Single-elimination, randomized bracket. Best-of-3 series: first to 2 wins
+          advances. Game 3 (if tied): loser of game 2 plays as white.
           Uses the bot time limit above.
         </p>
         <div className="tournament-actions">
+          <div className="tournament-controls">
+            <label htmlFor="tournament-move-delay">Move Delay (ms):</label>
+            <input
+              id="tournament-move-delay"
+              type="range"
+              min="0"
+              max="5000"
+              step="100"
+              value={moveDelay}
+              onChange={(e) => setMoveDelay(parseInt(e.target.value, 10))}
+              disabled={tournamentRunning}
+            />
+            <span className="delay-value">{moveDelay}ms</span>
+          </div>
           <button
             className="btn-start"
             onClick={handleStartTournament}
