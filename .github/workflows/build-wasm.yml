@@ -99,7 +99,7 @@ jobs:
       - name: Build competition React app
         run: |
           cd competition/web
-          npm ci
+          npm install
           npx vite build
 
       - name: Copy competition to site
