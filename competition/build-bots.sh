@@ -3,6 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+SCRIPTS_DIR="${SCRIPT_DIR}/scripts"
 FORKS_DIR="${SCRIPT_DIR}/forks"
 BOTS_OUTPUT_DIR="${SCRIPT_DIR}/web/public/bots"
 EMSDK_DIR="${SCRIPT_DIR}/emsdk"
@@ -18,9 +19,9 @@ GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m'
 
-log()   { echo -e "${GREEN}>>>${NC} $*"; }
-warn()  { echo -e "${YELLOW}>>> WARNING:${NC} $*"; }
-err()   { echo -e "${RED}>>> ERROR:${NC} $*"; }
+log()   { echo -e "${GREEN}>>>${NC} $*" >&2; }
+warn()  { echo -e "${YELLOW}>>> WARNING:${NC} $*" >&2; }
+err()   { echo -e "${RED}>>> ERROR:${NC} $*" >&2; }
 
 # ---------- 1. Ensure Emscripten is available ----------
 ensure_emscripten() {
@@ -48,51 +49,18 @@ ensure_emscripten() {
 
 # ---------- 2. Fetch all forks from GitHub API ----------
 fetch_forks() {
+    local output_file="$1"
     log "Fetching forks of ${REPO_OWNER}/${REPO_NAME}..."
 
-    local auth_header=""
+    local token_arg=""
     if [ -n "${GITHUB_TOKEN:-}" ]; then
-        auth_header="Authorization: Bearer ${GITHUB_TOKEN}"
+        token_arg="--token ${GITHUB_TOKEN}"
+        log "Using authenticated GitHub API access"
+    else
+        warn "No GITHUB_TOKEN set — using unauthenticated API (60 req/hr limit)"
     fi
 
-    local page=1
-    local all_forks="[]"
-
-    while true; do
-        local url="${API_URL}?per_page=100&page=${page}"
-        local response
-        if [ -n "$auth_header" ]; then
-            response=$(curl -sfL -H "$auth_header" -H "Accept: application/vnd.github+json" "$url")
-        else
-            response=$(curl -sfL -H "Accept: application/vnd.github+json" "$url")
-        fi
-
-        local count
-        count=$(echo "$response" | python3 -c "import sys,json; print(len(json.load(sys.stdin)))" 2>/dev/null || echo "0")
-
-        if [ "$count" -eq 0 ]; then
-            break
-        fi
-
-        all_forks=$(python3 -c "
-import sys, json
-existing = json.loads('''$all_forks''')
-new = json.loads(sys.stdin.read())
-existing.extend(new)
-print(json.dumps(existing))
-" <<< "$response")
-
-        if [ "$count" -lt 100 ]; then
-            break
-        fi
-        page=$((page + 1))
-    done
-
-    local total
-    total=$(echo "$all_forks" | python3 -c "import sys,json; print(len(json.load(sys.stdin)))")
-    log "Found ${total} forks"
-
-    echo "$all_forks"
+    python3 "${SCRIPTS_DIR}/fetch_forks.py" "$REPO_OWNER" "$REPO_NAME" "$output_file" $token_arg
 }
 
 # ---------- 3. Compile a single fork ----------
@@ -178,8 +146,10 @@ main() {
     mkdir -p "$FORKS_DIR"
     mkdir -p "$BOTS_OUTPUT_DIR"
 
-    local forks_json
-    forks_json=$(fetch_forks)
+    # Fetch forks into a temp file
+    local forks_file
+    forks_file=$(mktemp)
+    fetch_forks "$forks_file"
 
     # Parse fork data into arrays
     local usernames=()
@@ -192,25 +162,16 @@ main() {
         clone_urls+=("$curl")
         avatar_urls+=("$aurl")
         html_urls+=("$hurl")
-    done < <(echo "$forks_json" | python3 -c "
-import sys, json
-forks = json.load(sys.stdin)
-for f in forks:
-    owner = f.get('owner', {})
-    print('{}|{}|{}|{}'.format(
-        owner.get('login', ''),
-        f.get('clone_url', ''),
-        owner.get('avatar_url', ''),
-        f.get('html_url', '')
-    ))
-")
+    done < <(python3 "${SCRIPTS_DIR}/parse_forks.py" "$forks_file")
+    rm -f "$forks_file"
 
     local total=${#usernames[@]}
     log "Processing ${total} forks..."
 
-    # Build manifest
-    local manifest="["
-    local first=true
+    # Build manifest using a temp file
+    local manifest_tmp
+    manifest_tmp=$(mktemp)
+    echo "[]" > "$manifest_tmp"
     local success_count=0
     local fail_count=0
 
@@ -224,23 +185,11 @@ for f in forks:
             continue
         fi
 
-        echo ""
+        echo "" >&2
         log "=== [$(( i + 1 ))/${total}] ${username} ==="
 
         if compile_fork "$username" "$clone_url"; then
-            if [ "$first" = true ]; then
-                first=false
-            else
-                manifest+=","
-            fi
-            manifest+=$(python3 -c "
-import json
-print(json.dumps({
-    'username': '${username}',
-    'avatar': '${avatar_url}',
-    'forkUrl': '${html_url}'
-}))
-")
+            python3 "${SCRIPTS_DIR}/manifest.py" add "$manifest_tmp" "$username" "$avatar_url" "$html_url"
             success_count=$((success_count + 1))
         else
             warn "Skipping '${username}' due to errors"
@@ -248,12 +197,11 @@ print(json.dumps({
         fi
     done
 
-    manifest+="]"
+    # Write final pretty-printed manifest
+    python3 "${SCRIPTS_DIR}/manifest.py" format "$manifest_tmp" "$MANIFEST_FILE"
+    rm -f "$manifest_tmp"
 
-    # Write manifest
-    echo "$manifest" | python3 -m json.tool > "$MANIFEST_FILE"
-
-    echo ""
+    echo "" >&2
     log "========================================="
     log "Competition build complete!"
     log "  Successful: ${success_count}"
