@@ -101,6 +101,21 @@ function App() {
     );
   };
 
+  const formatReason = (reason: string): string => {
+    const map: Record<string, string> = {
+      checkmate: 'checkmate',
+      stalemate: 'stalemate',
+      timeout: 'timeout',
+      'invalid-move': 'invalid move',
+      'draw-repetition': 'draw (repetition)',
+      'draw-insufficient': 'draw (insufficient material)',
+      'draw-50-move': 'draw (50-move rule)',
+      forfeit: 'forfeit',
+      'time-advantage': 'time advantage',
+    };
+    return map[reason] ?? reason;
+  };
+
   const getGameWinReason = (result: GameResult): GameWinReason => {
     if (!result) return 'draw-50-move';
     if (result.type === 'checkmate') return 'checkmate';
@@ -118,7 +133,12 @@ function App() {
     whiteBot: BotInfo,
     blackBot: BotInfo,
     tournamentTimeLimitMs: number = timeLimitMs,
-  ) => {
+  ): Promise<{
+    winner: BotInfo;
+    loser: BotInfo;
+    gameResults: MatchResult[];
+    matchTotalTimeMs: Record<string, number>;
+  }> => {
     if (!engineRef.current) {
       throw new Error('Game engine not ready');
     }
@@ -126,133 +146,62 @@ function App() {
     const originalTimeLimit = engineRef.current.getTimeLimit();
     engineRef.current.setTimeLimit(tournamentTimeLimitMs);
 
+    const matchTotalTimeMs: Record<string, number> = { [whiteBot.username]: 0, [blackBot.username]: 0 };
+
     try {
-      let whiteBotWins = 0;
-      let blackBotWins = 0;
-      let gameNumber = 1;
-      let game2Winner: BotInfo | null = null;
-      let game2Loser: BotInfo | null = null;
-      const gameResults: MatchResult[] = [];
+      setWhitePlayer({ type: 'bot', bot: whiteBot });
+      setBlackPlayer({ type: 'bot', bot: blackBot });
+      await engineRef.current.loadPlayers(
+        { type: 'bot', bot: whiteBot },
+        { type: 'bot', bot: blackBot },
+      );
+      await engineRef.current.play();
 
-      // Play up to 3 games
-      while (gameNumber <= 3) {
-        // Determine colors for this game
-        let currentWhiteBot: BotInfo;
-        let currentBlackBot: BotInfo;
-
-        if (gameNumber <= 2) {
-          // Games 1-2: keep same colors (white stays white, black stays black)
-          currentWhiteBot = whiteBot;
-          currentBlackBot = blackBot;
-        } else {
-          // Game 3: loser of game 2 plays as white
-          if (game2Winner === whiteBot) {
-            currentWhiteBot = blackBot;
-            currentBlackBot = whiteBot;
-          } else {
-            currentWhiteBot = whiteBot;
-            currentBlackBot = blackBot;
-          }
-        }
-
-        setWhitePlayer({ type: 'bot', bot: currentWhiteBot });
-        setBlackPlayer({ type: 'bot', bot: currentBlackBot });
-        await engineRef.current.loadPlayers(
-          { type: 'bot', bot: currentWhiteBot },
-          { type: 'bot', bot: currentBlackBot },
-        );
-        await engineRef.current.play();
-
-        const state = engineRef.current.getState();
-        if (state.status !== 'finished') {
-          throw new Error('Match aborted');
-        }
-
-        const winnerColor = getWinnerColor(state.result);
-        const reason = getGameWinReason(state.result);
-        const isDraw =
-          !!state.result &&
-          (state.result.type === 'stalemate' ||
-            state.result.type === 'draw-repetition' ||
-            state.result.type === 'draw-insufficient' ||
-            state.result.type === 'draw-50-move');
-
-        if (isDraw) {
-          if (gameNumber >= 3) {
-            const totals = getMoveTimeTotals(state.moves);
-            let winner: BotInfo;
-            if (totals.white === totals.black) {
-              winner = game2Winner ?? currentWhiteBot;
-            } else {
-              winner = totals.white < totals.black ? currentWhiteBot : currentBlackBot;
-            }
-            const loser = winner === currentWhiteBot ? currentBlackBot : currentWhiteBot;
-            gameResults.push({ winner, loser, reason: 'time-advantage' });
-            return { winner, loser, gameResults };
-          }
-
-          gameNumber++;
-          continue;
-        }
-
-        if (gameNumber === 1) {
-          if (winnerColor === 'w') {
-            whiteBotWins++;
-            gameResults.push({ winner: whiteBot, loser: blackBot, reason });
-            if (whiteBotWins === 2) {
-              return { winner: whiteBot, loser: blackBot, gameResults };
-            }
-          } else if (winnerColor === 'b') {
-            blackBotWins++;
-            gameResults.push({ winner: blackBot, loser: whiteBot, reason });
-            if (blackBotWins === 2) {
-              return { winner: blackBot, loser: whiteBot, gameResults };
-            }
-          }
-        } else if (gameNumber === 2) {
-          if (winnerColor === 'w') {
-            whiteBotWins++;
-            game2Winner = whiteBot;
-            game2Loser = blackBot;
-            gameResults.push({ winner: whiteBot, loser: blackBot, reason });
-            if (whiteBotWins === 2) {
-              return { winner: whiteBot, loser: blackBot, gameResults };
-            }
-          } else if (winnerColor === 'b') {
-            blackBotWins++;
-            game2Winner = blackBot;
-            game2Loser = whiteBot;
-            gameResults.push({ winner: blackBot, loser: whiteBot, reason });
-            if (blackBotWins === 2) {
-              return { winner: blackBot, loser: whiteBot, gameResults };
-            }
-          }
-        } else if (gameNumber === 3) {
-          // Game 3 determines the final winner
-          if (winnerColor === 'w') {
-            gameResults.push({ winner: currentWhiteBot, loser: currentBlackBot, reason });
-            return { winner: currentWhiteBot, loser: currentBlackBot, gameResults };
-          } else if (winnerColor === 'b') {
-            gameResults.push({ winner: currentBlackBot, loser: currentWhiteBot, reason });
-            return { winner: currentBlackBot, loser: currentWhiteBot, gameResults };
-          } else {
-            // Draw in game 3 - the winner from game 2 advances
-            gameResults.push({ winner: game2Winner || whiteBot, loser: game2Loser || blackBot, reason });
-            if (game2Winner === whiteBot) {
-              return { winner: whiteBot, loser: blackBot, gameResults };
-            } else {
-              return { winner: blackBot, loser: whiteBot, gameResults };
-            }
-          }
-        }
-
-        gameNumber++;
+      const state = engineRef.current.getState();
+      if (state.status !== 'finished') {
+        throw new Error('Match aborted');
       }
 
-      // Fallback (should not reach here)
-      throw new Error('Best-of-3 match completed without winner');
+      const totals = getMoveTimeTotals(state.moves);
+      matchTotalTimeMs[whiteBot.username] += totals.white;
+      matchTotalTimeMs[blackBot.username] += totals.black;
+
+      const winnerColor = getWinnerColor(state.result);
+      const reason = getGameWinReason(state.result);
+      const isDraw =
+        !!state.result &&
+        (state.result.type === 'stalemate' ||
+          state.result.type === 'draw-repetition' ||
+          state.result.type === 'draw-insufficient' ||
+          state.result.type === 'draw-50-move');
+
+      if (isDraw) {
+        const totalsDraw = getMoveTimeTotals(state.moves);
+        const winner = totalsDraw.white <= totalsDraw.black ? whiteBot : blackBot;
+        const loser = winner === whiteBot ? blackBot : whiteBot;
+        return {
+          winner,
+          loser,
+          gameResults: [{ winner, loser, reason: 'time-advantage' }],
+          matchTotalTimeMs,
+        };
+      }
+
+      if (winnerColor === 'w') {
+        return {
+          winner: whiteBot,
+          loser: blackBot,
+          gameResults: [{ winner: whiteBot, loser: blackBot, reason }],
+          matchTotalTimeMs,
+        };
+      }
+      return {
+        winner: blackBot,
+        loser: whiteBot,
+        gameResults: [{ winner: blackBot, loser: whiteBot, reason }],
+        matchTotalTimeMs,
+      };
     } finally {
-      // Restore original time limit
       engineRef.current.setTimeLimit(originalTimeLimit);
     }
   };
@@ -284,6 +233,7 @@ function App() {
         fourthPlace: null,
         headToHead: {},
         tournamentTimeLimitMs: tournamentTimeLimitMs,
+        matchLog: [],
       };
 
       const refreshViewerData = () =>
@@ -314,17 +264,38 @@ function App() {
         await new Promise((r) => setTimeout(r, 0));
 
         const result = await playBotMatch(whiteBot, blackBot, tournamentTimeLimitMs);
+        for (const gr of result.gameResults) {
+          baseState.matchLog!.push({
+            white: whiteBot.username,
+            black: blackBot.username,
+            winner: gr.winner.username,
+            reason: gr.reason,
+          });
+        }
+        setTournament((prev) => (prev ? { ...prev, matchLog: baseState.matchLog } : prev));
+
         trackHeadToHead(headToHead, result.winner, result.loser);
 
-        const winnerScore = result.gameResults.filter((r) => r.winner.username === result.winner.username).length;
-        const loserScore = result.gameResults.length - winnerScore;
+        let winnerScore = result.gameResults.filter((r) => r.winner.username === result.winner.username).length;
+        let loserScore = result.gameResults.length - winnerScore;
+        let matchWinner = result.winner;
+        let matchLoser = result.loser;
+
+        if (winnerScore === loserScore) {
+          const timeW = result.matchTotalTimeMs[whiteBot.username] ?? 0;
+          const timeB = result.matchTotalTimeMs[blackBot.username] ?? 0;
+          matchWinner = timeW <= timeB ? whiteBot : blackBot;
+          matchLoser = matchWinner === whiteBot ? blackBot : whiteBot;
+          winnerScore = 2;
+          loserScore = 1;
+        }
 
         await updateMatchResult(
           manager,
           matchId,
           match,
-          ctx.botToParticipantId.get(result.winner.username)!,
-          ctx.botToParticipantId.get(result.loser.username)!,
+          ctx.botToParticipantId.get(matchWinner.username)!,
+          ctx.botToParticipantId.get(matchLoser.username)!,
           winnerScore,
           loserScore,
         );
@@ -350,6 +321,7 @@ function App() {
         thirdPlace,
         fourthPlace,
         headToHead,
+        matchLog: baseState.matchLog,
         currentMatchId: null,
         currentMatchBots: null,
       });
@@ -504,6 +476,18 @@ function App() {
               onHumanMove={handleHumanMove}
               boardOrientation={boardOrientation}
             />
+            {tournament?.matchLog && tournament.matchLog.length > 0 && (
+              <div className="match-log-panel">
+                <h3>Match results</h3>
+                <ul className="match-log-list">
+                  {tournament.matchLog.map((entry, i) => (
+                    <li key={i} className="match-log-line">
+                      {entry.white} vs {entry.black}: {entry.winner} won ({formatReason(entry.reason)})
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
           <div className="game-right">
             {!tournamentActive ? (

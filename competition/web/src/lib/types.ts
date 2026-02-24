@@ -113,6 +113,8 @@ export interface TournamentState {
   bracketsViewerData?: BracketsViewerData | null;
   /** Current match participants for "Now playing" display */
   currentMatchBots?: { white: BotInfo; black: BotInfo } | null;
+  /** Log of match results (one line per game): white vs black, winner, reason */
+  matchLog?: { white: string; black: string; winner: string; reason: string }[];
 }
 
 // Messages from main thread -> worker

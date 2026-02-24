@@ -563,6 +563,39 @@ body {
   border-radius: 3px;
 }
 
+.game-left .match-log-panel {
+  margin-top: 16px;
+}
+
+.match-log-panel {
+  padding: 16px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+}
+
+.match-log-panel h3 {
+  font-size: 1em;
+  margin-bottom: 10px;
+  color: var(--accent);
+}
+
+.match-log-list {
+  list-style: none;
+  font-size: 0.9em;
+  font-family: 'Courier New', monospace;
+}
+
+.match-log-line {
+  padding: 4px 0;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-primary);
+}
+
+.match-log-line:last-child {
+  border-bottom: none;
+}
+
 .tournament-results {
   margin-top: 12px;
   padding: 12px;
