@@ -11,17 +11,23 @@ interface GameControlsProps {
   onMoveDelayChange: (ms: number) => void;
 }
 
-const resultLabels: Record<NonNullable<GameResult>, string> = {
-  'white-checkmate': 'White wins by checkmate!',
-  'black-checkmate': 'Black wins by checkmate!',
-  'stalemate': 'Draw by stalemate',
-  'draw-repetition': 'Draw by threefold repetition',
-  'draw-insufficient': 'Draw by insufficient material',
-  'draw-50-move': 'Draw by 50-move rule',
-  'white-forfeit-invalid': 'Black wins — White made an invalid move',
-  'black-forfeit-invalid': 'White wins — Black made an invalid move',
-  'white-forfeit-timeout': 'Black wins — White timed out',
-  'black-forfeit-timeout': 'White wins — Black timed out',
+const formatResultLabel = (result: GameResult): string => {
+  if (!result) return '';
+  if (result.type === 'checkmate') {
+    return result.winner === 'w' ? 'White wins by checkmate!' : 'Black wins by checkmate!';
+  }
+  if (result.type === 'stalemate') return 'Draw by stalemate';
+  if (result.type === 'draw-repetition') return 'Draw by threefold repetition';
+  if (result.type === 'draw-insufficient') return 'Draw by insufficient material';
+  if (result.type === 'draw-50-move') return 'Draw by 50-move rule';
+  if (result.type === 'forfeit') {
+    const winner = result.loser === 'w' ? 'Black' : 'White';
+    if (result.reason === 'timeout') {
+      return `${winner} wins — ${result.loser === 'w' ? 'White' : 'Black'} timed out`;
+    }
+    return `${winner} wins — ${result.loser === 'w' ? 'White' : 'Black'} made an invalid move`;
+  }
+  return '';
 };
 
 export const GameControls: React.FC<GameControlsProps> = ({
@@ -101,7 +107,7 @@ export const GameControls: React.FC<GameControlsProps> = ({
 
       {isFinished && gameState.result && (
         <div className="game-result">
-          {resultLabels[gameState.result]}
+          {formatResultLabel(gameState.result)}
         </div>
       )}
     </div>

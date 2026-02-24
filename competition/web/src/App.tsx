@@ -82,21 +82,21 @@ function App() {
 
   const getWinnerColor = (result: GameResult): 'w' | 'b' | null => {
     if (!result) return null;
-    if (result.startsWith('white-')) return 'w';
-    if (result.startsWith('black-')) return 'b';
+    if (result.type === 'checkmate') return result.winner;
+    if (result.type === 'forfeit') return result.loser === 'w' ? 'b' : 'w';
     return null;
   };
 
   const getGameWinReason = (result: GameResult): GameWinReason => {
     if (!result) return 'draw-50-move';
-    if (result.includes('checkmate')) return 'checkmate';
-    if (result.includes('stalemate')) return 'stalemate';
-    if (result.includes('timeout')) return 'timeout';
-    if (result.includes('invalid')) return 'invalid-move';
-    if (result.includes('forfeit')) return 'forfeit';
-    if (result.includes('repetition')) return 'draw-repetition';
-    if (result.includes('insufficient')) return 'draw-insufficient';
-    if (result.includes('50-move')) return 'draw-50-move';
+    if (result.type === 'checkmate') return 'checkmate';
+    if (result.type === 'stalemate') return 'stalemate';
+    if (result.type === 'draw-repetition') return 'draw-repetition';
+    if (result.type === 'draw-insufficient') return 'draw-insufficient';
+    if (result.type === 'draw-50-move') return 'draw-50-move';
+    if (result.type === 'forfeit') {
+      return result.reason === 'timeout' ? 'timeout' : 'invalid-move';
+    }
     return 'draw-50-move';
   };
 

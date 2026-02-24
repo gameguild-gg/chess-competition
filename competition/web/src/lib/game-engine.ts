@@ -283,7 +283,7 @@ export class GameEngine {
     const player = turn === 'w' ? this.state.whitePlayer : this.state.blackPlayer;
 
     if (!player) {
-      this.emit('finished', turn === 'w' ? 'white-forfeit-invalid' : 'black-forfeit-invalid');
+      this.emit('finished', { type: 'forfeit', loser: turn, reason: 'invalid' });
       return;
     }
 
@@ -330,7 +330,7 @@ export class GameEngine {
     const worker = turn === 'w' ? this.whiteWorker : this.blackWorker;
 
     if (!worker) {
-      this.emit('finished', turn === 'w' ? 'white-forfeit-invalid' : 'black-forfeit-invalid');
+      this.emit('finished', { type: 'forfeit', loser: turn, reason: 'invalid' });
       return;
     }
 
@@ -345,9 +345,9 @@ export class GameEngine {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       if (msg.includes('timeout')) {
-        this.emit('finished', turn === 'w' ? 'white-forfeit-timeout' : 'black-forfeit-timeout');
+        this.emit('finished', { type: 'forfeit', loser: turn, reason: 'timeout' });
       } else {
-        this.emit('finished', turn === 'w' ? 'white-forfeit-invalid' : 'black-forfeit-invalid');
+        this.emit('finished', { type: 'forfeit', loser: turn, reason: 'invalid' });
       }
       return;
     }
@@ -363,7 +363,7 @@ export class GameEngine {
       const moveResult = this.chess.move({ from, to, promotion });
 
       if (!moveResult) {
-        this.emit('finished', turn === 'w' ? 'white-forfeit-invalid' : 'black-forfeit-invalid');
+        this.emit('finished', { type: 'forfeit', loser: turn, reason: 'invalid' });
         return;
       }
 
@@ -391,7 +391,7 @@ export class GameEngine {
         this.emit('paused', null);
       }
     } catch {
-      this.emit('finished', turn === 'w' ? 'white-forfeit-invalid' : 'black-forfeit-invalid');
+      this.emit('finished', { type: 'forfeit', loser: turn, reason: 'invalid' });
     }
   }
 
@@ -428,15 +428,16 @@ export class GameEngine {
     let result: GameResult = null;
 
     if (this.chess.isCheckmate()) {
-      result = this.chess.turn() === 'w' ? 'black-checkmate' : 'white-checkmate';
+      const winner = this.chess.turn() === 'w' ? 'b' : 'w';
+      result = { type: 'checkmate', winner };
     } else if (this.chess.isStalemate()) {
-      result = 'stalemate';
+      result = { type: 'stalemate' };
     } else if (this.chess.isThreefoldRepetition()) {
-      result = 'draw-repetition';
+      result = { type: 'draw-repetition' };
     } else if (this.chess.isInsufficientMaterial()) {
-      result = 'draw-insufficient';
+      result = { type: 'draw-insufficient' };
     } else if (this.chess.isDraw()) {
-      result = 'draw-50-move';
+      result = { type: 'draw-50-move' };
     }
 
     this.emit('finished', result);

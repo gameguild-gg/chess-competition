@@ -24,16 +24,12 @@ export type GameStatus =
   | 'finished';
 
 export type GameResult =
-  | 'white-checkmate'
-  | 'black-checkmate'
-  | 'stalemate'
-  | 'draw-repetition'
-  | 'draw-insufficient'
-  | 'draw-50-move'
-  | 'white-forfeit-invalid'
-  | 'black-forfeit-invalid'
-  | 'white-forfeit-timeout'
-  | 'black-forfeit-timeout'
+  | { type: 'checkmate'; winner: 'w' | 'b' }
+  | { type: 'stalemate' }
+  | { type: 'draw-repetition' }
+  | { type: 'draw-insufficient' }
+  | { type: 'draw-50-move' }
+  | { type: 'forfeit'; loser: 'w' | 'b'; reason: 'invalid' | 'timeout' }
   | null;
 
 export interface MoveRecord {
