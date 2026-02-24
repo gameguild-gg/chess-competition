@@ -345,7 +345,7 @@ function App() {
           break;
         }
 
-        const nextRound = buildRound(winners, roundIndex + 1, totalRounds);
+        const nextRound = buildRound(shuffleBots(winners), roundIndex + 1, totalRounds);
         tournamentState = {
           ...tournamentState,
           rounds: [...tournamentState.rounds, nextRound],
