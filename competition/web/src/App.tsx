@@ -392,12 +392,12 @@ function App() {
     whitePlayer?.type === 'bot' && blackPlayer?.type === 'human' ? 'black' : 'white';
 
   // compute recent bots each render
-  const sixMonthsAgo = new Date();
-  sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+  const now = new Date();
+  const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 6, now.getDate());
   const recentBots = bots.filter((b) => {
     if (!b.updatedAt) return false;
-    const d = new Date(b.updatedAt);
-    return d >= sixMonthsAgo;
+    const botDate = new Date(b.updatedAt);
+    return botDate >= sixMonthsAgo;
   });
 
   const displayBots = botFilter === 'recent' ? recentBots : bots;
