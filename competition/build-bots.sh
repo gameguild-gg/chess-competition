@@ -164,14 +164,14 @@ main() {
     local clone_urls=()
     local avatar_urls=()
     local html_urls=()
-    local updated_ats=()
+    local pushed_ats=()
 
-    while IFS='|' read -r uname curl aurl hurl uat; do
+    while IFS='|' read -r uname curl aurl hurl pat; do
         usernames+=("$uname")
         clone_urls+=("$curl")
         avatar_urls+=("$aurl")
         html_urls+=("$hurl")
-        updated_ats+=("$uat")
+        pushed_ats+=("$pat")
     done < <(python3 "${SCRIPTS_DIR}/parse_forks.py" "$forks_file")
     rm -f "$forks_file"
 
@@ -203,25 +203,25 @@ main() {
         local clone_url="${clone_urls[$i]}"
         local avatar_url="${avatar_urls[$i]}"
         local html_url="${html_urls[$i]}"
-        local updated_at="${updated_ats[$i]}"
+        local pushed_at="${pushed_ats[$i]}"
 
         if [ -z "$username" ]; then
             continue
         fi
 
-        if [ -n "${RECENT_ONLY:-}" ] && [ -n "$updated_at" ]; then
+        if [ -n "${RECENT_ONLY:-}" ] && [ -n "$pushed_at" ]; then
             # compare lexicographically since ISO format sorts
-            if [[ "$updated_at" < "$cutoff" ]]; then
-                warn "Skipping ${username} (updated at $updated_at < $cutoff)"
+            if [[ "$pushed_at" < "$cutoff" ]]; then
+                warn "Skipping ${username} (pushed at $pushed_at < $cutoff)"
                 continue
             fi
         fi
 
         echo "" >&2
-        log "=== [$(( i + 1 ))/${total}] ${username} (updated: ${updated_at:-unknown}) ==="
+        log "=== [$(( i + 1 ))/${total}] ${username} (pushed: ${pushed_at:-unknown}) ==="
 
         if compile_fork "$username" "$clone_url"; then
-            python3 "${SCRIPTS_DIR}/manifest.py" add "$manifest_tmp" "$username" "$avatar_url" "$html_url" "$updated_at"
+            python3 "${SCRIPTS_DIR}/manifest.py" add "$manifest_tmp" "$username" "$avatar_url" "$html_url" "$pushed_at"
             success_count=$((success_count + 1))
         else
             warn "Skipping '${username}' due to errors"
